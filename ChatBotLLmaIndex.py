@@ -8,9 +8,7 @@ from sqlalchemy import create_engine
 from langchain.chains import RetrievalQA
 from langchain_openai import ChatOpenAI  # ✅ dùng cho LangChain với OpenRouter
 from langchain_core.retrievers import BaseRetriever
-# from langchain_core.documents import Document
-# from llama_index.core.schema import Document
-# ✅ Đặt biệt danh rõ ràng cho từng loại
+
 from llama_index.core.schema import Document as LlamaDocument
 from langchain_core.documents import Document as LangchainDocument
 import uuid
@@ -18,8 +16,7 @@ import json
 from typing import List
 from llama_index.core.retrievers import BaseRetriever as LlamaRetriever
 from pydantic import Field
-# from llama_index.core.schema import TextNode
-# from sqlalchemy import text
+
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 embed_model = HuggingFaceEmbedding(model_name="keepitreal/vietnamese-sbert")
 import os
@@ -56,7 +53,7 @@ def check_pass():
     global OPENROUTER_API_KEY
     print("🔑 Nhập mật khẩu để giải mã API Key:")
     # password = getpass.getpass()
-    key = base64.urlsafe_b64encode(hashlib.sha256("".encode()).digest())
+    key = base64.urlsafe_b64encode(hashlib.sha256("Ngan412@.".encode()).digest())
     f = Fernet(key)
     OPENROUTER_API_KEY = f.decrypt(encrypted_api_key.encode()).decode()
     os.environ["OPENROUTER_API_KEY"] = OPENROUTER_API_KEY
@@ -105,9 +102,9 @@ def init_qa_chain():
     for row in raw_data:
         parsed_data = parse_text_to_dict(row.text)
         content = (
-            f"Sách '{parsed_data.get("title")}' là một tác phẩm thuộc thể loại {parsed_data.get("category_name")}, "
-            f"được viết bởi {parsed_data.get("author_name")} và xuất bản bởi {parsed_data.get("publisher_name")}. "
-            f"Hiện có {parsed_data.get("quantity")} bản trong kho, giá bán {parsed_data.get("price")} VNĐ."
+            f"Sách '{parsed_data.get('title')}' là một tác phẩm thuộc thể loại {parsed_data.get('category_name')}, "
+            f"được viết bởi {parsed_data.get('author_name')} và xuất bản bởi {parsed_data.get('publisher_name')}. "
+            f"Hiện có {parsed_data.get('quantity')} bản trong kho, giá bán {parsed_data.get('price')} VNĐ."
         )
         # print(content)
         extra_info = {
@@ -261,12 +258,7 @@ def ask_bookshop(request: QueryRequest):
             reader = DatabaseReader(engine=engine)
             raw_data = reader.load_data(query=response)
             for row in raw_data:
-                print("rowwwwwwwwwwww")
-                print(row)
                 parsed_data = parse_text_to_dict(row.text)
-                print("rowwwwwwwwwwww2")
-                print(parsed_data)
-                
                 products.append(parsed_data)
             return {
                 "products": products,
