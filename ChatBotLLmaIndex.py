@@ -6,11 +6,9 @@ from llama_index.readers.database import DatabaseReader
 from llama_index.llms.openrouter import OpenRouter
 from sqlalchemy import create_engine
 from langchain.chains import RetrievalQA
-from langchain_openai import ChatOpenAI  # ✅ dùng cho LangChain với OpenRouter
+
+from langchain_openai import ChatOpenAI  
 from langchain_core.retrievers import BaseRetriever
-# from langchain_core.documents import Document
-# from llama_index.core.schema import Document
-# ✅ Đặt biệt danh rõ ràng cho từng loại
 from llama_index.core.schema import Document as LlamaDocument
 from langchain_core.documents import Document as LangchainDocument
 import uuid
@@ -18,17 +16,14 @@ import json
 from typing import List
 from llama_index.core.retrievers import BaseRetriever as LlamaRetriever
 from pydantic import Field
-# from llama_index.core.schema import TextNode
-# from sqlalchemy import text
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 embed_model = HuggingFaceEmbedding(model_name="keepitreal/vietnamese-sbert")
-import os
-from cryptography.fernet import Fernet
-import base64, hashlib, getpass
+import numpy as np
 # dùng cho câu hỏi logic 
 from langchain_community.utilities import SQLDatabase
 from langchain_experimental.sql import SQLDatabaseChain
 from langchain.prompts import PromptTemplate
+from llama_index.core.vector_stores  import VectorStoreQuery
 sql_db = SQLDatabase.from_uri(
     "mssql+pyodbc://@localhost/BOOK_SHOP_API?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes"
 )
@@ -47,20 +42,11 @@ class QueryRequest(BaseModel):
     question: str
 
 # === INIT API KEY ===
-encrypted_api_key = "gAAAAABog0FSo-Xam59eQZgtSuFnOmEDi4RLoZwvLX4bbvicn0rVM5814RtRNlTOZskoXuotOGv5eOjxrBglt6qtWu2wFzIQZImosqWm83vjdWul4szncWushwiZs01OMv9GWR-c_O9xx503jFDaOrgEXaE-Rr9wYigVwgqB73jOJpOugC8DM5U="
-OPENROUTER_API_KEY = None
+OPENROUTER_API_KEY = ""
 OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
 qa_chain = None  # <-- để toàn cục dùng được
 sql_chain = None  # <-- để toàn cục dùng được
-def check_pass():
-    global OPENROUTER_API_KEY
-    print("🔑 Nhập mật khẩu để giải mã API Key:")
-    # password = getpass.getpass()
-    key = base64.urlsafe_b64encode(hashlib.sha256("".encode()).digest())
-    f = Fernet(key)
-    OPENROUTER_API_KEY = f.decrypt(encrypted_api_key.encode()).decode()
-    os.environ["OPENROUTER_API_KEY"] = OPENROUTER_API_KEY
-
+index = None  # <-- để toàn cục dùng được
 # chuyen string sang object
 def parse_text_to_dict(text: str) -> dict:
     # Tách chuỗi dựa trên dấu `,` nhưng vẫn giữ nguyên cặp key: value
@@ -73,9 +59,7 @@ def parse_text_to_dict(text: str) -> dict:
     return data
 # === DB INIT ===
 def init_qa_chain():
-    global qa_chain, OPENROUTER_API_KEY, sql_chain
-    if OPENROUTER_API_KEY is None:
-        check_pass()
+    global qa_chain, OPENROUTER_API_KEY, sql_chain,index
     connection_string = (
     "mssql+pyodbc://@localhost/BOOK_SHOP_API?"
     "driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes"
@@ -90,14 +74,14 @@ def init_qa_chain():
         book.image,
         book.quantity,
         book.price,
-        author.name AS author_name,
-        category.name AS category_name,
-        publisher.name AS publisher_name
+        authors.name AS author_name,
+        categories.name AS category_name,
+        publishers.name AS publisher_name
     FROM 
-        book
-    JOIN author ON book.authorid = author.id
-    JOIN category ON book.categoryid = category.id
-    JOIN publisher ON book.publisherid = publisher.id
+        books as book
+    JOIN authors ON book.authorid = authors.id
+    JOIN categories ON book.categoryid = categories.id
+    JOIN publishers ON book.publisherid = publishers.id
     WHERE 
         book.isdeleted = 0;
     """)
@@ -167,6 +151,7 @@ def init_qa_chain():
         retriever=langchain_retriever,
         return_source_documents=True
     )
+
 def is_logic_question(question: str) -> bool:
     keywords = [
         "đắt nhất", "rẻ nhất", "bao nhiêu quyển", "còn hàng", "giá", "số lượng", "thuộc thể loại", 
@@ -188,7 +173,7 @@ def init_logictic_search():
     Bạn là một trợ lý SQL sử dụng SQL Server.
     Cơ sở dữ liệu có các bảng và cột sau:
     NẾU HỎI VỀ SÁCH THÌ LẤY THÔNG TIN: Id, Title,Image, Price
-    Bảng [Book]:
+    Bảng [Books]:
     - Id (uniqueidentifier)  
     - Isbn (char) 
     - Title (nvarchar)                                                                                                                             
@@ -200,40 +185,47 @@ def init_logictic_search():
     - Quantity (int)
     - IsDeleted (bit)
 
-    Bảng [Category]:
+    Bảng [Categories]:
     - Id (uniqueidentifier)
     - Name (nvarchar(100))
     - IsDeleted (bit)
 
-    Bảng [Publisher]:
+    Bảng [Publisheries]:
     - Id (uniqueidentifier)
     - Name (nvarchar(100))
     - IsDeleted (bit)
 
-    Bảng [Author]:
+    Bảng [Authors]:
     - Id (uniqueidentifier)
     - Name (nvarchar(100))
     - IsDeleted (bit)
                                                  
+    Bảng [OrderItems]:
+    - BookId (uniqueidentifier)
+    - Quantity (smallint)
+                                                 
     Ghi chú:
     - Các bảng có quan hệ như sau:
-    + Book.CategoryId → Category.Id
-    + Book.PublisherId → Publisher.Id
-    + Book.AuthorId → Author.Id
+    + Books.CategoryId → Categories.Id
+    + Books.PublisherId → Publishers.Id
+    + Books.AuthorId → Authors.Id
+    + OrderItems.BookId → Books.Id
     
-    TUYỆT ĐỐI KHÔNG được thêm bất kỳ dấu markdown nào như dấu ``` hoặc dấu `.
-    KHÔNG BAO GIỜ được viết:
-    ```sql                                           .
-    Chỉ trả về đúng câu lệnh sql
+    QUY TẮC BẮT BUỘC:
+    1. Chỉ trả về CÂU LỆNH SQL DUY NHẤT.
+    2. KHÔNG được bao quanh bằng bất kỳ ký tự Markdown nào (ví dụ: ```, `sql`, ```sql).
+    3. Không thêm bất kỳ văn bản, giải thích, tiêu đề hoặc ký tự ngoài câu SQL.
+    4. Nếu vi phạm các điều trên, câu trả lời coi như sai.
+
     Câu hỏi: {input}
     SQL:
     """)
 
     sql_chain = SQLDatabaseChain.from_llm(
-    llm=langchain_llm,
-    db=sql_db,
-    prompt=custom_prompt,
-    verbose=True,
+        llm=langchain_llm,
+        db=sql_db,
+        prompt=custom_prompt,
+        verbose=True,
     )
 
 # === GỌI CHAT ===
@@ -277,6 +269,7 @@ def ask_bookshop(request: QueryRequest):
 
     # Ngược lại, dùng semantic search + gợi ý hình ảnh
     result = qa_chain.invoke({"query": question})
+   
     try:
         products = json.loads(result["result"])
     except Exception:
@@ -296,6 +289,79 @@ def ask_bookshop(request: QueryRequest):
         "products": products,
         "suggestions": suggestions
     }
+class RecommendRequest(BaseModel):
+    book_ids: list[str]  
+
+from llama_index.core.vector_stores import VectorStoreQuery
+
+@app.post("/recommend")
+def recommend_for_user(req: RecommendRequest):
+    if qa_chain is None:
+        init_qa_chain()
+
+    global index
+    if index is None:
+        raise ValueError("Vector index chưa được khởi tạo.")
+
+    recommend_books = req.book_ids
+    if not recommend_books:
+        return {"error": "Danh sách book_ids rỗng"}
+
+    # ===== Lấy vector embedding của từng sản phẩm trong lịch sử =====
+    recommend_set = set(map(str, recommend_books))
+    vectors = []
+    for doc in index.docstore.docs.values():
+        doc_id = doc.metadata.get("id")
+        if doc_id is not None and str(doc_id) in recommend_set:
+            emb = embed_model.get_text_embedding(doc.get_content())
+            if emb:
+                vectors.append(emb)
+
+    if not vectors:
+        return {"error": "Không tìm thấy vector cho sản phẩm lịch sử"}
+
+    # ===== Tính vector trung bình =====
+    user_vector = np.mean(vectors, axis=0).tolist()
+
+    # ===== Tạo query object đúng chuẩn =====
+    query_obj = VectorStoreQuery(
+        query_embedding=user_vector,
+        similarity_top_k=8  # lấy nhiều hơn để loại trừ rồi còn đủ kết quả
+    )
+
+    # ===== Query vector store =====
+    results = index.vector_store.query(query_obj)
+
+    recommended_books = []
+    if hasattr(results, "nodes") and results.nodes:
+        for node in results.nodes:
+            parsed_data = node.metadata
+            if parsed_data.get("id") not in recommend_books:  # loại trừ sách đã có
+                recommended_books.append({
+                    "id": parsed_data.get("id", ""),
+                    "title": parsed_data.get("title", ""),
+                    "author": parsed_data.get("author_name", ""),
+                    "category": parsed_data.get("category_name", ""),
+                    "price": parsed_data.get("price", ""),
+                    "image": parsed_data.get("image", "")
+                })
+    elif hasattr(results, "ids"):
+        for doc_id in results.ids:
+            doc = index.docstore.docs.get(doc_id)
+            if doc:
+                parsed_data = doc.metadata
+                if parsed_data.get("id") not in recommend_books:
+                    recommended_books.append({
+                        "id": parsed_data.get("id", ""),
+                        "title": parsed_data.get("title", ""),
+                        "author": parsed_data.get("author_name", ""),
+                        "category": parsed_data.get("category_name", ""),
+                        "price": parsed_data.get("price", ""),
+                        "image": parsed_data.get("image", "")
+                    })
+
+    return {"recommended_books": recommended_books}
+
 # === MAIN ===
 if __name__ == "__main__":
     import uvicorn
