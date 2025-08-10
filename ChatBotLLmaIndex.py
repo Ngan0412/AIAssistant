@@ -89,9 +89,9 @@ def init_qa_chain():
     for row in raw_data:
         parsed_data = parse_text_to_dict(row.text)
         content = (
-            f"Sách '{parsed_data.get("title")}' là một tác phẩm thuộc thể loại {parsed_data.get("category_name")}, "
-            f"được viết bởi {parsed_data.get("author_name")} và xuất bản bởi {parsed_data.get("publisher_name")}. "
-            f"Hiện có {parsed_data.get("quantity")} bản trong kho, giá bán {parsed_data.get("price")} VNĐ."
+            f"Sách '{parsed_data.get('title')}' là một tác phẩm thuộc thể loại {parsed_data.get('category_name')}, "
+            f"được viết bởi {parsed_data.get('author_name')} và xuất bản bởi {parsed_data.get('publisher_name')}. "
+            f"Hiện có {parsed_data.get('quantity')} bản trong kho, giá bán {parsed_data.get('price')} VNĐ."
         )
         # print(content)
         extra_info = {
@@ -253,12 +253,7 @@ def ask_bookshop(request: QueryRequest):
             reader = DatabaseReader(engine=engine)
             raw_data = reader.load_data(query=response)
             for row in raw_data:
-                print("rowwwwwwwwwwww")
-                print(row)
                 parsed_data = parse_text_to_dict(row.text)
-                print("rowwwwwwwwwwww2")
-                print(parsed_data)
-                
                 products.append(parsed_data)
             return {
                 "products": products,
