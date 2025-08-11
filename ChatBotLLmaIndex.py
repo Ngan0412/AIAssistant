@@ -42,7 +42,7 @@ class QueryRequest(BaseModel):
     question: str
 
 # === INIT API KEY ===
-OPENROUTER_API_KEY = ""
+OPENROUTER_API_KEY = "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"
 OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
 qa_chain = None  # <-- để toàn cục dùng được
 sql_chain = None  # <-- để toàn cục dùng được
@@ -89,8 +89,8 @@ def init_qa_chain():
     for row in raw_data:
         parsed_data = parse_text_to_dict(row.text)
         content = (
-            f"Sách '{parsed_data.get('title')}' là một tác phẩm thuộc thể loại {parsed_data.get('category_name')}, "
-            f"được viết bởi {parsed_data.get('author_name')} và xuất bản bởi {parsed_data.get('publisher_name')}. "
+            f"'{parsed_data.get('title')}'  {parsed_data.get('category_name')}, "
+            f"{parsed_data.get('author_name')}{parsed_data.get('publisher_name')}. "
             f"Hiện có {parsed_data.get('quantity')} bản trong kho, giá bán {parsed_data.get('price')} VNĐ."
         )
         # print(content)
@@ -154,8 +154,8 @@ def init_qa_chain():
 
 def is_logic_question(question: str) -> bool:
     keywords = [
-        "đắt nhất", "rẻ nhất", "bao nhiêu quyển", "còn hàng", "giá", "số lượng", "thuộc thể loại", 
-        "tác giả nào", "nhà xuất bản nào", "lọc theo", "sắp xếp", "tìm sách"
+        "đắt nhất", "rẻ nhất",  "số lượng", "thuộc thể loại", 
+        "tác giả nào", "nhà xuất bản nào"
     ]
     return any(kw in question.lower() for kw in keywords)
 
@@ -321,7 +321,7 @@ def recommend_for_user(req: RecommendRequest):
     # ===== Tạo query object đúng chuẩn =====
     query_obj = VectorStoreQuery(
         query_embedding=user_vector,
-        similarity_top_k=8  # lấy nhiều hơn để loại trừ rồi còn đủ kết quả
+        similarity_top_k=6  # lấy nhiều hơn để loại trừ rồi còn đủ kết quả
     )
 
     # ===== Query vector store =====
