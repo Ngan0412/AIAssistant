@@ -1,0 +1,15 @@
+llama-index==0.9.48
+fastapi
+uvicorn
+langchain
+langchain-openai
+langchain-community
+sqlalchemy
+pydantic
+openai
+cryptography
+requests
+python-dotenv
+pyodbc
+tiktoken
+huggingface-hub

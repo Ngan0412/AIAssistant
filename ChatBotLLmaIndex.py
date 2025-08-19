@@ -42,7 +42,7 @@ class QueryRequest(BaseModel):
     question: str
 
 # === INIT API KEY ===
-OPENROUTER_API_KEY = "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"
+OPENROUTER_API_KEY = ""
 OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
 qa_chain = None  # <-- để toàn cục dùng được
 sql_chain = None  # <-- để toàn cục dùng được
@@ -135,7 +135,7 @@ def init_qa_chain():
                 LangchainDocument(page_content=node.get_content(), metadata=node.metadata)
                 for node in results
             ]
-    llama_retriever = index.as_retriever(similarity_top_k=3)
+    llama_retriever = index.as_retriever(similarity_top_k=10)
     langchain_retriever = CustomRetriever(llama_retriever=llama_retriever)
     # --- LangChain LLM ---
     langchain_llm = ChatOpenAI(
@@ -155,7 +155,7 @@ def init_qa_chain():
 def is_logic_question(question: str) -> bool:
     keywords = [
         "đắt nhất", "rẻ nhất",  "số lượng", "thuộc thể loại", 
-        "tác giả nào", "nhà xuất bản nào"
+        "tác giả nào", "nhà xuất bản nào", "tìm sách"
     ]
     return any(kw in question.lower() for kw in keywords)
 
